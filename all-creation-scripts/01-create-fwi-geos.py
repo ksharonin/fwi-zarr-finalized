@@ -1,4 +1,6 @@
-# FWI GEOS Creation script
+# 01-create-fwi-geos
+# Create initial zarr for GPM.LATE.v5
+# Author: Katrina Sharonin
 
 import re
 import os
@@ -17,13 +19,18 @@ from tqdm.auto import tqdm
 import warnings
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
+# absolute paths for data, zarr file, proc file
+basedir = "/autofs/brewer/rfield1/storage/observations/GFWED/Sipongi/fwiCalcs.GEOS-5/Default/GEOS-5"
 zar_file = '/autofs/brewer/eisfire/katrina/update-zarr-utils/FWI.GEOS-5.zarr'
-proc_file = '/autofs/brewer/eisfire/katrina/update-zarr-utils/processed-files-bak.txt' # TODO - generate procfile check functionality
+proc_file = '/autofs/brewer/eisfire/katrina/update-zarr-utils/processed-files-bak.txt'
 
+# check provided paths
 if not os.path.isdir(zar_file):
-	raise FileNotFoundError('Zarr directory does not exist; check provided path')
+    raise FileNotFoundError('Zarr path not found; check provided directory')
+if not os.path.isdir(basedir):
+    raise FileNotFoundError('Sipongi data input path invalid; check provided path')
 if not os.path.isfile(proc_file):
-	raise FileNotFoundError('Proc file does not exist; check provided path')
+    raise FileNotFoundError('Proc file not found; check provided path')
 
 chunking = {
     "lat": 100,
@@ -37,10 +44,7 @@ files = []
 years = range(2017, 2023)
 years = range(2014, 2015) # TODO - flagged, year creation limit
 
-basedir = "/autofs/brewer/rfield1/storage/observations/GFWED/Sipongi/fwiCalcs.GEOS-5/Default/GEOS-5"
-
-# add all found files to bak -> see lower
-assert os.path.exists(basedir)
+# Parse paths and add existing hourly files
 for y in years:
     assert os.path.exists(f"{basedir}/{y}")
     files += sorted(glob.glob(f"{basedir}/{y}/FWI.GEOS-5.Daily.*.nc"))
@@ -121,6 +125,7 @@ dat_extended = dat.reindex({"time": alldates}, fill_value = np.nan)
 assert len(dat_extended.time) % chunking["time"] == 0
 dat_extended = dat_extended.chunk(chunking)
 
+print("Writing FWI GEOS-5 output zarr...")
 with ProgressBar():
     dat.to_zarr(zar_file, mode="w")
 
@@ -130,6 +135,8 @@ with open(proc_file, "a") as f:
 		f.write("\n" + afile)
 
 # Test output
+print("Testing Zarr: FWI GEOS-5")
 dtest = xr.open_zarr(zar_file)
 dtest_sub = dtest.sel(lat=39.74, lon=-104.9903, method="nearest")
 dtest_sub.mean(["time", "forecast"])
+print("Done!")

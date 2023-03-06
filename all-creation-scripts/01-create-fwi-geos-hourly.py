@@ -1,5 +1,5 @@
-# create-zarr-hour
-# Create initial zarr for GEOS-5 hourly Fire Weather Index (FWI)
+# 01-create-fwi-geos-hourly
+# Create initial zarr for FWI.GEOS-5.Hourly.Default
 # Author: Katrina Sharonin
 
 import re
@@ -20,19 +20,18 @@ from tqdm.auto import tqdm
 import warnings
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
-# Provide absolute path to bak + zarr
+# absolute paths for data, zarr file, proc file
+basedir = "/lovelace/brewer/rfield1/storage/observations/GFWED/Sipongi/fwiCalcs.GEOS-5/Default/GEOS-5/"
 zar_file = '/autofs/brewer/eisfire/katrina/update-zarr-utils/FWI.GEOS-5.Hourly.zarr'
-procfile = '/autofs/brewer/eisfire/katrina/update-zarr-utils/processed-files-bak-hourly.txt'
+proc_file = '/autofs/brewer/eisfire/katrina/update-zarr-utils/processed-files-bak-hourly.txt'
 
-# Test if dir zar_file and procfile exist
-if os.path.isdir(zar_file):
-	pass
-else:
-	raise FileNotFoundError('Zarr directory does not exist. Provide a valid path or create a new directory')	
-if os.path.isfile(procfile):
-	pass
-else:
-	raise FileNotFoundError('The processing .txt file does not exist. Provide a valid path or create a .txt file')
+# check provided paths
+if not os.path.isdir(zar_file):
+    raise FileNotFoundError('Zarr path not found; check provided directory')
+if not os.path.isdir(basedir):
+    raise FileNotFoundError('Sipongi data input path invalid; check provided path')
+if not os.path.isfile(proc_file):
+    raise FileNotFoundError('Proc file not found; check provided path')
 
 chunking = {
     "lat": 100,
@@ -43,18 +42,14 @@ chunking = {
 # Keep all the dataset in the data directory
 files = []
 years = range(2017, int(datetime.now().year) + 1)
-years = range(2020, 2021) # TODO - flagged, this is an artificial limit 
-
-# base directory
-basedir = "/lovelace/brewer/rfield1/storage/observations/GFWED/Sipongi/fwiCalcs.GEOS-5/Default/GEOS-5/"
+years = range(2020, 2021) # TODO - flagged, this is an artificial limit
 
 # Parse paths and add existing hourly files
-assert os.path.exists(basedir)
 for y in years:
     assert os.path.exists(f"{basedir}/{y}")
     files += sorted(glob.glob(f"{basedir}/{y}/FWI.GEOS-5.Hourly.*.nc"))
 
-assert len(files) != 0, "No Files found, check provided year range" 
+assert len(files) != 0, "No files found, check provided year range" 
 
 d0 = xr.open_dataset(files[0])
 dvars = list(d0.keys())
@@ -79,7 +74,7 @@ def make_blank(pd_date):
 
 dlist = []
 # MODIFIED ARR - slice for only two files
-files = files[:2:] 
+# files = files[:2:]
 
 # Sort files using annual directories
 for file in tqdm(files):
@@ -133,19 +128,18 @@ dat_extended = dat.reindex({"time": alldates}, fill_value = np.nan)
 assert len(dat_extended.time) % chunking["time"] == 0
 dat_extended = dat_extended.chunk(chunking)
 
-# Write to file + progress bar
+print("Writing FWI GEOS-5 Hourly output zarr...")
 with ProgressBar():
     dat_extended.to_zarr(zar_file, mode="w")
     
-# TODO - update bak to include all written file names
-with open(procfile, "a") as f:
+with open(proc_file, "a") as f:
 	for afile in files:
 		f.write("\n" +  afile)
 
 # Test output
-# See Katrina Sharonin's local testing module
-print("Initiate testing: GEOS-5_FFMC Contents")
+print("Testing Zarr: GEOS-5_FFMC Hourly")
 open_test = xr.open_zarr(zar_file)
 open_test1 = open_test.isel(time=slice(0,24))['GEOS-5_FFMC'].values
 open_test1_count = np.count_nonzero(~np.isnan(open_test1))
 print(open_test1_count)
+print("Done!")
