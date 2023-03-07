@@ -1,32 +1,48 @@
-# Algorithm for continuously updating a Zarr data store
-# GPM Late
-# (1) On creation, fill the last time dimension to the end of the chunk with
-# `nan`s.
-# 
-# (2) On update:
-#   (a) Open existing store. Check last timestamp and time chunk size.
-#   (b1) If timestamp in file, replace.
-#   (b2) If not, create new chunk of same size and replace.
+# 02-update-fwi-gpm-late-v5
+# Update current zarr for GPM.LATE.v5
+# Author: Katrina Sharonin
 
 import datetime
 import re
 import glob
 import sys
+import os
 
 import xarray as xr
 import pandas as pd
 import numpy as np
+from datetime import datetime
+from os.path import exists
 
-timevar = "time"
-zarrpath = "FWI_GPM_LATE_v5_Daily.zarr"
 
-procfile = "processed-files-bak.txt"
-allfiles = sorted(list(glob.glob("raw-input/*/*.Daily.*.nc")))
+zarrpath = "/autofs/brewer/eisfire/katrina/update-zarr-utils/FWI.GPM.Late.zarr"
+procfile = "/autofs/brewer/eisfire/katrina/update-zarr-utils/processed-files-bak-late.txt"
+basedir = "/lovelace/brewer/rfield1/storage/observations/GFWED/Sipongi/fwiCalcs.GEOS-5/Default/GPM.LATE.v5/"
+
+# check provided paths
+if not os.path.isdir(zarrpath):
+    raise FileNotFoundError('Zarr path not found; check provided directory')
+if not os.path.isdir(basedir):
+    raise FileNotFoundError('Sipongi data input path invalid; check provided path')
+if not os.path.isfile(procfile):
+    raise FileNotFoundError('Proc file not found; check provided path')
+
+allfiles = []
+years = range(2017, int(datetime.now().year) + 1)
+
+for y in years:
+    assert os.path.exists(f"{basedir}/{y}")
+    allfiles += sorted(glob.glob(f"{basedir}/{y}/FWI.GPM.LATE.v5.Daily.Default.*.nc"))
+    
+# allfiles = sorted(list(glob.glob(f"{basedir}/*/*.Daily.*.nc")))
+
+# identify old vs new files
 with open(procfile, "r") as f:
     # Remove empty lines
     procfiles = [l for l in f.read().splitlines() if l != '']
 newfiles = sorted(set(allfiles) - set(procfiles))
 
+# if no new files, exit program
 if len(newfiles) == 0:
     sys.exit("No new files to process!")
 
@@ -45,13 +61,10 @@ dnew_all = dnew_raw.assign_coords(time=dates)
 # For now, do this individually for each timestep. It's very inefficient (lots
 # of writes) but safe and conceptually simple, and shouldn't take too long for
 # small numbers of files.
-# TODO The much faster way to do this is to split up `dnew_all` into existing
-# vs. new chunks and then do those separately.
 for idt, t in enumerate(dnew_all.time):
     # idt = 1; t = dnew_all.time[idt]
     dnew = dnew_all.isel(time=slice(idt, idt+1))
     print(dnew.time.values[0])
-    # Is the current timestamp in the Zarr file?
     # NOTE: Have to re-read `dtarget` each iteration because it may have been
     # expanded by the code below.
     dtarget = xr.open_zarr(zarrpath)
@@ -87,11 +100,9 @@ for idt, t in enumerate(dnew_all.time):
         # Now, append to the existing Zarr data store
         dummy.to_zarr(zarrpath, append_dim="time")
 
+    # Write to bak file with new file
     ifile = newfiles[idt]
     with open(procfile, "a") as f:
-        # Note: Flipping the position of the \n means this adds a blank line
-        # between "groups" of processed files. That's a minor feature -- it lets us
-        # see when groups of files have been processed.
         f.write("\n" + ifile)
 
 # Test the result
@@ -99,4 +110,4 @@ print("Testing new Zarr...")
 dtest = xr.open_zarr(zarrpath)
 dtest.sel(time = slice("2022-06-01", "2022-06-15"))
 
-print("Done!")
+print('Update FWI GPM Late v5 zarr process complete!')

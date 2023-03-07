@@ -1,5 +1,5 @@
 # 01-create-fwi-geos
-# Create initial zarr for GPM.LATE.v5
+# Create initial zarr for FWI GEOS-5
 # Author: Katrina Sharonin
 
 import re

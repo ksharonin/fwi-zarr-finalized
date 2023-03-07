@@ -1,5 +1,6 @@
-# FWI GEOS Update
-# non-localized version of update zarr for forecast
+# 02-update-fwi-geos
+# Update current zarr for FWI GEOS-5
+# Author: Katrina Sharonin
 
 import datetime
 import re
@@ -7,6 +8,8 @@ import glob
 import sys
 import dask
 import os
+from os.path import exists
+from datetime import datetime
 from tqdm.auto import tqdm
 import netCDF4 as nc
 
@@ -14,18 +17,27 @@ import xarray as xr
 import pandas as pd
 import numpy as np
 
-timevar = "time"
-zarrpath = '/autofs/brewer/eisfire/katrina/update-zarr-utils/FWI.GEOS-5.zarr'
-
-if not os.path.isdir(zarrpath):
-	raise FileNotFoundError('Zarr file does not exist; check provided path')
-
+zarrpath = "/autofs/brewer/eisfire/katrina/update-zarr-utils/FWI.GEOS-5.zarr"
 procfile = "/autofs/brewer/eisfire/katrina/update-zarr-utils/processed-files-bak.txt"
+basedir = "/autofs/brewer/rfield1/storage/observations/GFWED/Sipongi/fwiCalcs.GEOS-5/Default/GEOS-5"
 
+# check provided paths
+if not os.path.isdir(zarrpath):
+    raise FileNotFoundError('Zarr path not found; check provided directory')
+if not os.path.isdir(basedir):
+    raise FileNotFoundError('Sipongi data input path invalid; check provided path')
 if not os.path.isfile(procfile):
-	raise FileNotFoundError('Proc file txt does not exist; check provided path')
+    raise FileNotFoundError('Proc file not found; check provided path')
 
-allfiles = sorted(list(glob.glob("raw-input/*/*.Daily.*.nc")))  # flag - unsure if this would be different
+allfiles = []
+years = range(2017, int(datetime.now().year) + 1)
+
+for y in years:
+    assert os.path.exists(f"{basedir}/{y}")
+    allfiles += sorted(glob.glob(f"{basedir}/{y}/FWI.GEOS-5.Daily.*.nc"))
+# allfiles = sorted(list(glob.glob(f"{basedir}/*/*.Daily.*.nc")))
+
+# identify old vs new files
 with open(procfile, "r") as f:
     # Remove empty lines
     procfiles = [l for l in f.read().splitlines() if l != '']
@@ -67,7 +79,6 @@ def make_blank(pd_date):
             transpose("forecast", "time", "lat", "lon"))
 
 dlist = []
-basedir = "/autofs/brewer/rfield1/storage/observations/GFWED/Sipongi/fwiCalcs.GEOS-5/Default/GEOS-5" # flag - unsure if this would be different
 
 for file in tqdm(newfiles):
     date_match = re.match(r".*\.(\d{8})\.nc", os.path.basename(file))
@@ -167,5 +178,10 @@ for idt, t in enumerate(dnew_all.time):
         # Now, append to the existing Zarr data store
         dummy.to_zarr(zarrpath, append_dim="time")
 
-print('Update zarr process complete!')
-# for testing, see katrina's local file set up 
+
+# Write to bak file with new files
+with open(procfile, "a") as f:
+    for afile in newfiles:
+        f.write("\n" + afile)
+
+print('Update FWI GEOS zarr process complete!')

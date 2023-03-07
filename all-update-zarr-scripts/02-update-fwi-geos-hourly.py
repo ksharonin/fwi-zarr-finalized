@@ -1,5 +1,5 @@
-# 02-update-zarr-hour.py
-# If an GEOS-5 hourly FWI zarr exists, update content with recent files
+# 02-update-fwi-geos-hourly
+# Update current zarr for FWI.GEOS-5.Hourly.Default
 # Author: Katrina Sharonin
 
 import datetime
@@ -20,37 +20,32 @@ import xarray as xr
 import pandas as pd
 import numpy as np
 
-
-timevar = "time"
 zarrpath = '/autofs/brewer/eisfire/katrina/update-zarr-utils/FWI.GEOS-5.Hourly.zarr'
-procfile = "/autofs/brewer/eisfire/katrina/update-zarr-utils/processed-files-bak-hourly.txt" # flag - may be different
+procfile = "/autofs/brewer/eisfire/katrina/update-zarr-utils/processed-files-bak-hourly.txt"
+basedir = "/lovelace/brewer/rfield1/storage/observations/GFWED/Sipongi/fwiCalcs.GEOS-5/Default/GEOS-5/"
 
-# Test if zar_file and procfile exist
-if os.path.isdir(zarrpath):
-	pass
-else:
-	raise FileNotFoundError('Zarr directory does not exist. Provie a valid path or create a new dir')
-if os.path.isfile(procfile):
-	pass
-else:
-	raise FileNotFoundError('The processing .txt. file does not exist. Provide a valid path or create a new .txt')
+# check provided paths
+if not os.path.isdir(zarrpath):
+    raise FileNotFoundError('Zarr path not found; check provided directory')
+if not os.path.isdir(basedir):
+    raise FileNotFoundError('Sipongi data input path invalid; check provided path')
+if not os.path.isfile(procfile):
+    raise FileNotFoundError('Proc file not found; check provided path')
+
 
 allfiles = []
-basedir = "/lovelace/brewer/rfield1/storage/observations/GFWED/Sipongi/fwiCalcs.GEOS-5/Default/GEOS-5/"
-assert os.path.exists(basedir)
 years = range(2017, int(datetime.now().year) + 1)
-years = range(2022, 2024) # TODO - Artificial Limit on new files, comment out
 
 for y in years:
     assert os.path.exists(f"{basedir}/{y}")
     allfiles += sorted(glob.glob(f"{basedir}/{y}/FWI.GEOS-5.Hourly.*.nc"))
 
-# Open txt file to id current files in zarr
+# identify old vs new files
 with open(procfile, "r") as f:
     procfiles = [l for l in f.read().splitlines() if l != '']
 newfiles = sorted(set(allfiles) - set(procfiles))
 
-# Terminate program if no new files
+# if no new files, exit program
 if len(newfiles) == 0:
     sys.exit("No new files to process!")
 
@@ -88,9 +83,6 @@ def make_blank(pd_date):
 
 # base directory
 dlist = []
-
-# TODO MODIFIED: list cut down
-newfiles = newfiles[:6:]
 
 for file in tqdm(newfiles):
     date_match = re.match(r".*\.(\d{8})\.nc", os.path.basename(file))
@@ -189,14 +181,11 @@ for idt, t in enumerate(dnew_all.time):
         # Append to the existing Zarr data store
         dummy.to_zarr(zarrpath, append_dim="time")
 
-print('Update zarr process complete!')
 
 # Write to bak file with new files
 with open(procfile, "a") as f:
 	for afile in newfiles:
 		f.write("\n" + afile)
-
-# print('Initiate testing...')
-# Test output
-# See Katrina Sharonin's local testing module
+  
+print('Update FWI GEOS Hourly zarr process complete!')
 
