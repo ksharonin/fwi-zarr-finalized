@@ -7,6 +7,7 @@ import re
 import glob
 import sys
 import dask
+import dask.array
 import os
 from os.path import exists
 from datetime import datetime
