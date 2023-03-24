@@ -29,6 +29,7 @@ if not os.path.isfile(procfile):
 
 allfiles = []
 years = range(2017, int(datetime.now().year) + 1)
+# years = range(2015, 2016) # FLAG - artificial limit on update
 
 for y in years:
     assert os.path.exists(f"{basedir}/{y}")
@@ -47,11 +48,14 @@ if len(newfiles) == 0:
     sys.exit("No new files to process!")
 
 def parse_date(path):
+    # import data to form local availability
+    from datetime import date
     ms = re.search(r"\.(\d{4})(\d{2})(\d{2})\.nc$", path)
     year = int(ms.group(1))
     month = int(ms.group(2))
     day = int(ms.group(3))
-    date = datetime.date(year, month, day)
+    date = date(year, month, day)
+    # date = datetime.date(year, month, day)
     return date
 
 dnew_raw = xr.open_mfdataset(newfiles, combine="nested", concat_dim="time")
